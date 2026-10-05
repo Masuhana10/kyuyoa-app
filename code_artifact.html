@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>給与モチベ管理</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * { -webkit-tap-highlight-color: transparent; }
+    body { overscroll-behavior-y: none; }
+    input[type="number"] { -moz-appearance: textfield; }
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    
+    /* カレンダー用グリッド */
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 4px;
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans pb-20 selection:bg-emerald-500 selection:text-white">
+
+  <div class="max-w-md mx-auto p-4 space-y-6">
+    
+    <!-- モチベーションボード（合計表示） -->
+    <div class="bg-gradient-to-br from-emerald-600 to-teal-800 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+      <div class="absolute top-0 right-0 w-40 h-40 bg-white opacity-5 rounded-full -mr-10 -mt-10 pointer-events-none"></div>
+      
+      <div class="flex justify-between items-center mb-1 relative z-10">
+        <p class="text-sm font-semibold text-emerald-100 tracking-wider" id="monthTotalLabel">今月の合算見込み</p>
+      </div>
+      <div class="flex items-baseline gap-1 relative z-10 mb-4 border-b border-emerald-500/50 pb-4">
+        <span class="text-3xl font-bold text-emerald-50">¥</span>
+        <span class="text-5xl font-extrabold tracking-tight text-white" id="monthlyTotalCombined">0</span>
+      </div>
+      
+      <div class="flex justify-between relative z-10 text-sm">
+        <div class="flex flex-col">
+          <span class="text-emerald-200/70 font-semibold text-xs mb-0.5">確定済み (実績)</span>
+          <span class="font-bold text-emerald-50">¥ <span id="monthlyTotalActual">0</span></span>
+        </div>
+        <div class="flex flex-col text-right">
+          <span class="text-teal-200/70 font-semibold text-xs mb-0.5">これから (予定)</span>
+          <span class="font-bold text-amber-300">¥ <span id="monthlyTotalPlanned">0</span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- カレンダービュー -->
+    <div class="bg-slate-800/80 backdrop-blur-sm rounded-3xl p-5 border border-slate-700/50 shadow-lg">
+      <div class="flex justify-between items-center mb-4">
+        <button onclick="changeMonth(-1)" class="p-2 bg-slate-700 hover:bg-slate-600 rounded-xl transition text-slate-300">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+        </button>
+        <h2 class="text-lg font-bold text-white" id="calendarTitle">2026年10月</h2>
+        <button onclick="changeMonth(1)" class="p-2 bg-slate-700 hover:bg-slate-600 rounded-xl transition text-slate-300">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+        </button>
+      </div>
+      
+      <div class="calendar-grid mb-2 text-center text-xs font-semibold text-slate-400">
+        <div class="text-rose-400">日</div><div>月</div><div>火</div><div>水</div><div>木</div><div>金</div><div class="text-blue-400">土</div>
+      </div>
+      <div id="calendarDays" class="calendar-grid">
+        <!-- JSでカレンダーの日付と金額が生成される -->
+      </div>
+    </div>
+
+    <!-- シフト入力フォーム -->
+    <div class="bg-slate-800 rounded-3xl p-5 border border-slate-700/50 shadow-xl space-y-6">
+      <h3 class="text-lg font-bold text-slate-200 border-b border-slate-700 pb-2">シフト入力</h3>
+      
+      <!-- 日付選択 -->
+      <div>
+        <label class="block text-sm font-bold text-slate-300 mb-2">日付</label>
+        <input type="date" id="workDate" class="w-full bg-slate-900 border border-slate-600 rounded-2xl p-4 text-white text-lg focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors" onchange="handleDateChange()">
+        
+        <div id="holidayBadge" class="hidden mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-bold">
+          <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zm7-10a1 1 0 01.707.293l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L13.586 7 11.293 4.707a1 1 0 010-1.414zM14 11a1 1 0 011 1v1h1a1 1 0 110 2h-1v1a1 1 0 11-2 0v-1h-1a1 1 0 110-2h1v-1a1 1 0 011-1z" clip-rule="evenodd" /></svg>
+          <span id="holidayText">日・祝日手当 (+50円) 適用</span>
+        </div>
+      </div>
+
+      <!-- 実績/予定 選択 -->
+      <div>
+        <label class="block text-sm font-bold text-slate-300 mb-2">ステータス <span class="text-xs font-normal text-slate-500 ml-2">※未来の日は「予定」に</span></label>
+        <div class="grid grid-cols-2 gap-3">
+          <label class="relative cursor-pointer">
+            <input type="radio" name="shiftStatus" value="actual" class="peer sr-only" checked>
+            <div class="p-3 text-center rounded-xl border border-slate-600 bg-slate-900 text-slate-400 peer-checked:bg-emerald-500/20 peer-checked:border-emerald-500 peer-checked:text-emerald-400 font-bold transition-all">
+              実績 (働いた)
+            </div>
+          </label>
+          <label class="relative cursor-pointer">
+            <input type="radio" name="shiftStatus" value="planned" class="peer sr-only">
+            <div class="p-3 text-center rounded-xl border border-slate-600 bg-slate-900 text-slate-400 peer-checked:bg-amber-500/20 peer-checked:border-amber-500 peer-checked:text-amber-400 font-bold transition-all">
+              予定 (これから)
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- バイト先選択 -->
+      <div>
+        <label class="block text-sm font-bold text-slate-300 mb-2">バイト先</label>
+        <div class="grid grid-cols-3 gap-2">
+          <label class="relative cursor-pointer">
+            <input type="radio" name="workplace" value="mybasket" class="peer sr-only" checked onchange="toggleWorkplaceForm()">
+            <div class="p-2 text-center rounded-xl border border-slate-600 bg-slate-900 text-slate-400 peer-checked:bg-emerald-500/20 peer-checked:border-emerald-500 peer-checked:text-emerald-400 font-bold transition-all text-[11px] sm:text-xs flex items-center justify-center h-full">
+              まいばす
+            </div>
+          </label>
+          <label class="relative cursor-pointer">
+            <input type="radio" name="workplace" value="tutor" class="peer sr-only" onchange="toggleWorkplaceForm()">
+            <div class="p-2 text-center rounded-xl border border-slate-600 bg-slate-900 text-slate-400 peer-checked:bg-blue-500/20 peer-checked:border-blue-500 peer-checked:text-blue-400 font-bold transition-all text-[11px] sm:text-xs flex items-center justify-center h-full">
+              東大先生
+            </div>
+          </label>
+          <label class="relative cursor-pointer">
+            <input type="radio" name="workplace" value="oneoff" class="peer sr-only" onchange="toggleWorkplaceForm()">
+            <div class="p-2 text-center rounded-xl border border-slate-600 bg-slate-900 text-slate-400 peer-checked:bg-purple-500/20 peer-checked:border-purple-500 peer-checked:text-purple-400 font-bold transition-all text-[11px] sm:text-xs flex items-center justify-center h-full">
+              単発バイト
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- まいばすけっと入力フォーム -->
+      <div id="mybasketForm" class="space-y-4">
+        <div class="bg-indigo-900/30 border border-indigo-500/30 rounded-xl p-3 mb-2 flex items-center gap-2">
+          <svg class="w-5 h-5 text-indigo-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          <p class="text-xs text-indigo-200 font-medium">1勤務につき交通費<span class="font-bold text-white ml-1">260円</span>が自動加算されます</p>
+        </div>
+        
+        <label class="block text-sm font-bold text-slate-300">働いた（働く）時間</label>
+        
+        <!-- 早朝 -->
+        <div class="bg-slate-750/50 border border-slate-700 rounded-2xl p-3 focus-within:border-emerald-500 transition-colors">
+          <div class="flex justify-between items-center mb-2">
+            <div>
+              <p class="text-sm font-bold text-slate-200">早朝 <span class="text-xs font-normal text-slate-400 ml-1">(開店〜9:00)</span></p>
+              <p class="text-xs font-medium text-emerald-400">1,700円/h <span class="holiday-bonus-text text-rose-400 hidden">+50円</span></p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <input type="number" id="mb_morning_h" min="0" placeholder="0" class="w-16 p-2 bg-slate-900 border border-slate-600 rounded-xl text-center text-white focus:outline-none focus:border-emerald-500">
+            <span class="text-xs text-slate-400">時間</span>
+            <input type="number" id="mb_morning_m" min="0" max="59" placeholder="0" class="w-16 p-2 bg-slate-900 border border-slate-600 rounded-xl text-center text-white focus:outline-none focus:border-emerald-500">
+            <span class="text-xs text-slate-400">分</span>
+          </div>
+        </div>
+
+        <!-- 昼 -->
+        <div class="bg-slate-750/50 border border-slate-700 rounded-2xl p-3 focus-within:border-emerald-500 transition-colors">
+          <div class="flex justify-between items-center mb-2">
+            <div>
+              <p class="text-sm font-bold text-slate-200">昼 <span class="text-xs font-normal text-slate-400 ml-1">(9:00〜22:00)</span></p>
+              <p class="text-xs font-medium text-emerald-400">1,560円/h <span class="holiday-bonus-text text-rose-400 hidden">+50円</span></p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <input type="number" id="mb_day_h" min="0" placeholder="0" class="w-16 p-2 bg-slate-900 border border-slate-600 rounded-xl text-center text-white focus:outline-none focus:border-emerald-500">
+            <span class="text-xs text-slate-400">時間</span>
+            <input type="number" id="mb_day_m" min="0" max="59" placeholder="0" class="w-16 p-2 bg-slate-900 border border-slate-600 rounded-xl text-center text-white focus:outline-none focus:border-emerald-500">
+            <span class="text-xs text-slate-400">分</span>
+          </div>
+        </div>
+
+        <!-- 夜 -->
+        <div class="bg-slate-750/50 border border-slate-700 rounded-2xl p-3 focus-within:border-emerald-500 transition-colors">
+          <div class="flex justify-between items-center mb-2">
+            <div>
+              <p class="text-sm font-bold text-slate-200">夜 <span class="text-xs font-normal text-slate-400 ml-1">(22:00〜閉店)</span></p>
+              <p class="text-xs font-medium text-emerald-400">1,950円/h <span class="holiday-bonus-text text-rose-400 hidden">+50円</span></p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <input type="number" id="mb_night_h" min="0" placeholder="0" class="w-16 p-2 bg-slate-900 border border-slate-600 rounded-xl text-center text-white focus:outline-none focus:border-emerald-500">
+            <span class="text-xs text-slate-400">時間</span>
+            <input type="number" id="mb_night_m" min="0" max="59" placeholder="0" class="w-16 p-2 bg-slate-900 border border-slate-600 rounded-xl text-center text-white focus:outline-none focus:border-emerald-500">
+            <span class="text-xs text-slate-400">分</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 東大先生入力フォーム (初期非表示) -->
+      <div id="tutorForm" class="hidden space-y-4">
+        <label class="block text-sm font-bold text-slate-300">働いた（働く）時間</label>
+        <div class="bg-slate-750/50 border border-slate-700 rounded-2xl p-3 focus-within:border-blue-500 transition-colors">
+          <div class="mb-2">
+            <p class="text-sm font-bold text-slate-200">基本時給</p>
+            <p class="text-xs font-medium text-blue-400">2,500円/h</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <input type="number" id="tutor_h" min="0" placeholder="0" class="w-16 p-2 bg-slate-900 border border-slate-600 rounded-xl text-center text-white focus:outline-none focus:border-blue-500">
+            <span class="text-xs text-slate-400">時間</span>
+            <input type="number" id="tutor_m" min="0" max="59" placeholder="0" class="w-16 p-2 bg-slate-900 border border-slate-600 rounded-xl text-center text-white focus:outline-none focus:border-blue-500">
+            <span class="text-xs text-slate-400">分</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 単発バイト入力フォーム (初期非表示) -->
+      <div id="oneoffForm" class="hidden space-y-4">
+        <label class="block text-sm font-bold text-slate-300">労働時間と日給</label>
+        <div class="bg-slate-750/50 border border-slate-700 rounded-2xl p-4 focus-within:border-purple-500 transition-colors">
+          <div class="flex flex-col gap-4">
+            <div>
+              <p class="text-xs font-bold text-slate-400 mb-2">働いた（働く）時間 <span class="font-normal">(任意)</span></p>
+              <div class="flex items-center gap-2">
+                <input type="number" id="oneoff_h" min="0" placeholder="0" step="0.5" class="w-24 p-2 bg-slate-900 border border-slate-600 rounded-xl text-center text-white focus:outline-none focus:border-purple-500">
+                <span class="text-xs text-slate-400">時間</span>
+              </div>
+            </div>
+            <hr class="border-slate-700">
+            <div>
+              <p class="text-xs font-bold text-slate-400 mb-2">日給（稼いだ額）</p>
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-bold text-slate-300">¥</span>
+                <input type="number" id="oneoff_pay" min="0" placeholder="0" class="w-full p-2 bg-slate-900 border border-slate-600 rounded-xl text-right pr-4 text-white font-bold text-lg focus:outline-none focus:border-purple-500">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 保存ボタン -->
+      <button onclick="addShift()" class="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-bold py-4 rounded-2xl transition shadow-[0_0_15px_rgba(16,185,129,0.3)] active:scale-95 text-lg mt-4">
+        計算して記録する
+      </button>
+    </div>
+
+    <div class="space-y-4 pt-4">
+      <div class="flex justify-between items-center px-1">
+        <h3 class="text-sm font-bold text-slate-400">シフト履歴・予定</h3>
+      </div>
+      <div id="shiftList" class="space-y-3">
+        <!-- JSで追加 -->
+      </div>
+    </div>
+
+    <!-- データ管理セクション -->
+    <div class="space-y-4 pt-6 pb-8">
+      <h3 class="text-sm font-bold text-slate-400 border-b border-slate-700 pb-2 px-1">データ管理</h3>
+      <p class="text-xs text-slate-500 px-1 mb-2">機種変更時やデータのバックアップにご利用ください。※復元すると現在のデータは上書きされます。</p>
+      <div class="flex gap-3">
+        <button onclick="exportData()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3 rounded-xl border border-slate-600 transition flex items-center justify-center gap-2 text-sm shadow-sm active:scale-95">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+          バックアップ
+        </button>
+        <label class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3 rounded-xl border border-slate-600 transition flex items-center justify-center gap-2 text-sm shadow-sm active:scale-95 cursor-pointer">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+          データ復元
+          <input type="file" id="importFile" accept=".json" class="hidden" onchange="importData(event)">
+        </label>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // 保存先のキー
+    let shifts = JSON.parse(localStorage.getItem('shifts_v5') || '[]');
+    let holidaysData = {};
+    let isCurrentDateHoliday = false;
+    let currentCalDate = new Date(); // カレンダー表示用の基準月
+    let todayDateStr = "";
+
+    // メッセージ用のモーダル代わり(alert禁止対応)
+    function showMessage(msg) {
+        const el = document.createElement('div');
+        el.className = 'fixed top-5 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-6 py-3 rounded-xl shadow-2xl z-50 text-sm font-bold border border-slate-700 animate-bounce';
+        el.innerText = msg;
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 2500);
+    }
+
+    async function init() {
+      // 日付初期設定 (JST想定)
+      const today = new Date();
+      const offset = today.getTimezoneOffset() * 60000;
+      todayDateStr = (new Date(today.getTime() - offset)).toISOString().split('T')[0];
+      
+      document.getElementById('workDate').value = todayDateStr;
+
+      // 祝日データ取得
+      try {
+        const res = await fetch('https://holidays-jp.github.io/api/v1/date.json');
+        if (res.ok) holidaysData = await res.json();
+      } catch(e) {
+        console.log("祝日データ取得エラー", e);
+      }
+
+      handleDateChange();
+      renderAll();
+    }
+
+    // フォーム切り替え
+    function toggleWorkplaceForm() {
+      const workplace = document.querySelector('input[name="workplace"]:checked').value;
+      document.getElementById('mybasketForm').classList.toggle('hidden', workplace !== 'mybasket');
+      document.getElementById('tutorForm').classList.toggle('hidden', workplace !== 'tutor');
+      document.getElementById('oneoffForm').classList.toggle('hidden', workplace !== 'oneoff');
+    }
+
+    // 日付変更時の処理（日祝判定 ＆ 予定/実績の自動切り替え）
+    function handleDateChange() {
+      const dateStr = document.getElementById('workDate').value;
+      if(!dateStr) return;
+      
+      const d = new Date(dateStr);
+      const isSunday = d.getDay() === 0;
+      const holidayName = holidaysData[dateStr];
+      const isPublicHoliday = holidayName !== undefined;
+      
+      isCurrentDateHoliday = isSunday || isPublicHoliday;
+
+      // 日祝バッジの表示/非表示
+      const badge = document.getElementById('holidayBadge');
+      const badgeText = document.getElementById('holidayText');
+      const bonusTexts = document.querySelectorAll('.holiday-bonus-text');
+
+      if (isCurrentDateHoliday) {
+        badge.classList.remove('hidden');
+        badgeText.innerText = isPublicHoliday ? `祝日 (${holidayName}) 手当適用` : `日曜日 手当適用`;
+        bonusTexts.forEach(el => el.classList.remove('hidden'));
+      } else {
+        badge.classList.add('hidden');
+        bonusTexts.forEach(el => el.classList.add('hidden'));
+      }
+
+      // 未来の日付なら自動的に「予定」、今日以前なら「実績」にチェックを入れる
+      if (dateStr > todayDateStr) {
+        document.querySelector('input[name="shiftStatus"][value="planned"]').checked = true;
+      } else {
+        document.querySelector('input[name="shiftStatus"][value="actual"]').checked = true;
+      }
+    }
+
+    // 保存処理
+    function addShift() {
+      const dateStr = document.getElementById('workDate').value;
+      if (!dateStr) return showMessage('日付を選択してください');
+
+      const workplace = document.querySelector('input[name="workplace"]:checked').value;
+      const shiftStatus = document.querySelector('input[name="shiftStatus"]:checked').value;
+      const getV = (id) => parseFloat(document.getElementById(id).value) || 0;
+
+      let totalPay = 0;
+      let totalHours = 0;
+      let recordDetails = {};
+
+      if (workplace === 'mybasket') {
+        const mh = getV('mb_morning_h'), mm = getV('mb_morning_m');
+        const dh = getV('mb_day_h'), dm = getV('mb_day_m');
+        const nh = getV('mb_night_h'), nm = getV('mb_night_m');
+
+        if(mh+mm+dh+dm+nh+nm === 0) return showMessage('時間を入力してください');
+
+        const bonus = isCurrentDateHoliday ? 50 : 0;
+        const calc = (h, m, rate) => {
+          const hours = h + (m/60);
+          totalHours += hours;
+          return hours * (rate + bonus);
+        };
+
+        totalPay += calc(mh, mm, 1700);
+        totalPay += calc(dh, dm, 1560);
+        totalPay += calc(nh, nm, 1950);
+        
+        // 交通費加算
+        totalPay += 260;
+        
+        recordDetails = { place: 'まいばすけっと', bonusApplied: isCurrentDateHoliday, transportation: true };
+      
+      } else if (workplace === 'tutor') {
+        const th = getV('tutor_h'), tm = getV('tutor_m');
+        if(th+tm === 0) return showMessage('時間を入力してください');
+
+        const hours = th + (tm/60);
+        totalHours = hours;
+        totalPay = hours * 2500;
+        recordDetails = { place: '東大先生', bonusApplied: false, transportation: false };
+      
+      } else if (workplace === 'oneoff') {
+        const oh = getV('oneoff_h');
+        const op = getV('oneoff_pay');
+        if(op === 0) return showMessage('日給（稼いだ額）を入力してください');
+
+        totalHours = oh;
+        totalPay = op; // 日給をそのまま適用
+        recordDetails = { place: '単発バイト', bonusApplied: false, transportation: false };
+      }
+
+      shifts.push({
+        id: Date.now(),
+        date: dateStr,
+        workplace: workplace,
+        status: shiftStatus, // 'actual' | 'planned'
+        pay: Math.round(totalPay),
+        hours: totalHours,
+        details: recordDetails
+      });
+
+      localStorage.setItem('shifts_v5', JSON.stringify(shifts));
+      showMessage(shiftStatus === 'planned' ? '予定を記録しました' : '実績を記録しました');
+      
+      // 入力クリア
+      ['mb_morning_h','mb_morning_m','mb_day_h','mb_day_m','mb_night_h','mb_night_m','tutor_h','tutor_m','oneoff_h','oneoff_pay'].forEach(id => {
+        document.getElementById(id).value = '';
+      });
+
+      // 追加した月にカレンダーを移動させる
+      currentCalDate = new Date(dateStr);
+      renderAll();
+    }
+
+    function deleteShift(id) {
+      shifts = shifts.filter(s => s.id !== id);
+      localStorage.setItem('shifts_v5', JSON.stringify(shifts));
+      renderAll();
+    }
+
+    // カレンダーの月変更
+    function changeMonth(delta) {
+      currentCalDate.setMonth(currentCalDate.getMonth() + delta);
+      renderAll();
+    }
+
+    // 全体描画
+    function renderAll() {
+      const year = currentCalDate.getFullYear();
+      const month = currentCalDate.getMonth(); // 0-11
+      
+      // ヘッダータイトルの更新
+      document.getElementById('calendarTitle').innerText = `${year}年${month + 1}月`;
+      document.getElementById('monthTotalLabel').innerText = `${month + 1}月の合算見込み`;
+
+      const calDaysEl = document.getElementById('calendarDays');
+      calDaysEl.innerHTML = '';
+      
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      const startDayOfWeek = firstDay.getDay(); 
+      const totalDays = lastDay.getDate();
+
+      // 集計用変数
+      const dailyPayMap = {}; 
+      let monthActualPay = 0;
+      let monthPlannedPay = 0;
+      
+      // データ集計
+      shifts.forEach(s => {
+        const [sy, sm, sd] = s.date.split('-').map(Number);
+        if (sy === year && sm === month + 1) {
+          
+          if (!dailyPayMap[sd]) {
+            dailyPayMap[sd] = { actual: 0, planned: 0 };
+          }
+          
+          if (s.status === 'planned') {
+            dailyPayMap[sd].planned += s.pay;
+            monthPlannedPay += s.pay;
+          } else {
+            dailyPayMap[sd].actual += s.pay;
+            monthActualPay += s.pay;
+          }
+        }
+      });
+
+      // ダッシュボード更新
+      document.getElementById('monthlyTotalCombined').innerText = (monthActualPay + monthPlannedPay).toLocaleString();
+      document.getElementById('monthlyTotalActual').innerText = monthActualPay.toLocaleString();
+      document.getElementById('monthlyTotalPlanned').innerText = monthPlannedPay.toLocaleString();
+
+      // 1. カレンダーの生成 (空白セル)
+      for(let i = 0; i < startDayOfWeek; i++) {
+        const div = document.createElement('div');
+        div.className = 'p-1';
+        calDaysEl.appendChild(div);
+      }
+
+      // 日付セルの生成
+      const today = new Date(todayDateStr);
+      for(let d = 1; d <= totalDays; d++) {
+        const div = document.createElement('div');
+        const isToday = (today.getFullYear() === year && today.getMonth() === month && today.getDate() === d);
+        
+        let cellClass = 'p-1 flex flex-col items-center justify-center rounded-xl min-h-[50px] border relative ';
+        if (isToday) {
+            cellClass += 'bg-slate-700/80 border-emerald-500/50';
+        } else {
+            cellClass += 'border-transparent';
+        }
+        
+        const dayData = dailyPayMap[d];
+        const hasData = dayData && (dayData.actual > 0 || dayData.planned > 0);
+        
+        let htmlContent = `<span class="text-sm font-semibold ${hasData ? 'text-white' : 'text-slate-500'}">${d}</span>`;
+        
+        if (hasData) {
+            const totalDayPay = dayData.actual + dayData.planned;
+            // 予定が含まれている場合は文字色を黄色っぽく、実績のみなら緑に
+            const colorClass = dayData.planned > 0 ? 'text-amber-400' : 'text-emerald-400';
+            
+            htmlContent += `<span class="text-[9px] font-bold ${colorClass} leading-tight whitespace-nowrap mt-0.5">¥${totalDayPay.toLocaleString()}</span>`;
+            
+            // 予定アイコンバッジ
+            if (dayData.planned > 0) {
+                htmlContent += `<div class="absolute -top-1 -right-1 bg-amber-500 text-[8px] text-slate-900 font-bold px-1 rounded-sm shadow-sm border border-slate-800">予</div>`;
+            }
+        }
+
+        div.className = cellClass;
+        div.innerHTML = htmlContent;
+        calDaysEl.appendChild(div);
+      }
+
+      // 2. 履歴リストの生成
+      const listEl = document.getElementById('shiftList');
+      listEl.innerHTML = '';
+      
+      const sortedShifts = [...shifts].sort((a,b) => new Date(b.date) - new Date(a.date));
+      if(sortedShifts.length === 0) {
+        listEl.innerHTML = '<p class="text-sm text-slate-500 text-center py-4">履歴・予定がありません</p>';
+      }
+
+      sortedShifts.forEach(shift => {
+        const card = document.createElement('div');
+        // 予定の場合はボーダーを破線にして視覚的に分ける
+        const borderStyle = shift.status === 'planned' ? 'border-amber-500/30 border-dashed' : 'border-slate-700/50';
+        card.className = `bg-slate-800 border ${borderStyle} rounded-2xl p-4 flex justify-between items-center shadow-sm`;
+        
+        // バイト先に応じたタグの色設定
+        let placeColor = '';
+        if (shift.workplace === 'mybasket') {
+            placeColor = 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
+        } else if (shift.workplace === 'tutor') {
+            placeColor = 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+        } else {
+            placeColor = 'bg-purple-500/20 text-purple-400 border-purple-500/30';
+        }
+        
+        // ステータスバッジ
+        const statusBadge = shift.status === 'planned' 
+            ? `<span class="bg-amber-500/20 text-amber-400 border-amber-500/30 text-[10px] px-2 py-0.5 rounded border font-bold">予定</span>`
+            : `<span class="bg-slate-700 text-slate-300 border-slate-600 text-[10px] px-2 py-0.5 rounded border font-bold">実績</span>`;
+
+        let tags = `<span class="${placeColor} text-[10px] px-2 py-0.5 rounded border ml-1">${shift.details.place}</span>`;
+        if (shift.details.bonusApplied) {
+          tags += `<span class="bg-rose-500/20 text-rose-400 border-rose-500/30 text-[10px] px-2 py-0.5 rounded border ml-1">日祝</span>`;
+        }
+        if (shift.details.transportation) {
+          tags += `<span class="bg-indigo-500/20 text-indigo-400 border-indigo-500/30 text-[10px] px-2 py-0.5 rounded border ml-1">交</span>`;
+        }
+
+        const payColor = shift.status === 'planned' ? 'text-amber-300' : 'text-white';
+        // 労働時間の表示（単発バイトで入力がない場合は非表示に配慮）
+        const hoursText = shift.hours > 0 ? ` / ${shift.hours}h` : '';
+
+        card.innerHTML = `
+          <div>
+            <div class="text-sm font-bold text-slate-200 mb-1 flex items-center">
+                ${shift.date} <span class="text-xs font-normal text-slate-500 ml-2">${hoursText}</span>
+            </div>
+            <div class="flex items-center mt-1">
+                ${statusBadge}
+                ${tags}
+            </div>
+          </div>
+          <div class="flex flex-col items-end">
+            <div class="text-lg font-bold ${payColor} tracking-tight">¥${shift.pay.toLocaleString()}</div>
+            <button onclick="deleteShift(${shift.id})" class="text-xs text-slate-500 hover:text-rose-400 mt-1 px-2 py-1 bg-slate-900 rounded-md transition">削除</button>
+          </div>
+        `;
+        listEl.appendChild(card);
+      });
+    }
+
+    // バックアップ（エクスポート）
+    function exportData() {
+      if (shifts.length === 0) {
+        return showMessage('バックアップするデータがありません');
+      }
+      
+      const dataStr = JSON.stringify(shifts, null, 2);
+      const blob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.href = url;
+      const dateStrForFile = new Date().toISOString().split('T')[0];
+      a.download = `salary_backup_${dateStrForFile}.json`;
+      
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      showMessage('バックアップを保存しました');
+    }
+
+    // 復元（インポート）
+    function importData(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const importedData = JSON.parse(e.target.result);
+          
+          if (Array.isArray(importedData)) {
+            shifts = importedData;
+            localStorage.setItem('shifts_v5', JSON.stringify(shifts));
+            renderAll();
+            showMessage('データを復元しました！');
+          } else {
+            showMessage('ファイルの形式が正しくありません');
+          }
+        } catch (err) {
+          showMessage('ファイルの読み込みに失敗しました');
+          console.error(err);
+        }
+        // 同じファイルを選び直せるようにinputをリセット
+        event.target.value = '';
+      };
+      reader.readAsText(file);
+    }
+
+    // 起動
+    init();
+  </script>
+</body>
+</html>
